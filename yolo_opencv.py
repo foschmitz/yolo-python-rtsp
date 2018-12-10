@@ -53,7 +53,6 @@ def draw_prediction(img, class_id, confidence, x, y, x_plus_w, y_plus_h):
 
 def detect(image):
         
-    print('Processing image')
     Width = image.shape[1]
     Height = image.shape[0]
     scale = 0.00392
@@ -122,13 +121,16 @@ COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
 # writer.close()
 
 writer = imageio.get_writer('output.mp4', fps = fps)
-cap = cv2.VideoCapture('rtsp://192.168.0.210:7447/xxxx') 
+cap = cv2.VideoCapture('rtsp://192.168.0.210:7447/xxx') 
 frame_counter = 0
 while(True):
     # Capture frame-by-frame
+    print('Processing frame ' + str(frame_counter))
     ret, frame = cap.read()
-    detect(frame)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    if not frame is None:
+        detect(frame)
+    frame_counter=frame_counter+1
+    if frame_counter > 150:
         break
        
 writer.close()
