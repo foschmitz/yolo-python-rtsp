@@ -102,3 +102,7 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+sampledata/
+yolov3.weights
+object-detection.jpg
