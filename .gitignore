@@ -104,5 +104,7 @@ venv.bak/
 .mypy_cache/
 
 sampledata/
+output/
+output.mp4
 yolov3.weights
 object-detection.jpg

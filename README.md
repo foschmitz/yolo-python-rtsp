@@ -1,7 +1,7 @@
 # Object detection using deep learning with OpenCV and Python 
-This is clone of https://github.com/arunponnusamy/object-detection-opencv
+This project is base on clone of https://github.com/arunponnusamy/object-detection-opencv
 
-Customized to save recognized objects in folders to train a person detection network
+It is customized to save recognized objects in folders to train a person detection network
 
 OpenCV `dnn` module supports running inference on pre-trained deep learning models from popular frameworks like Caffe, Torch and TensorFlow. 
 
