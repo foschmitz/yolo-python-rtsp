@@ -120,10 +120,10 @@ def detect(image):
         h = box[3]
         save_bounded_image(orgImage, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
         draw_prediction(image, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
-
     if str2bool(args.invertcolor) == True:
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    writer.append_data(image)
+    return image
+    
 
 # Doing some Object Detection on a video
 classes = None
@@ -142,7 +142,9 @@ if args.input.startswith('rtsp'):
         print('Processing frame ' + str(frame_counter))
         ret, frame = cap.read()
         if ret and frame_counter > int(args.framestart):
-            detect(frame)
+            frame = detect(frame)
+            if int(args.framelimit) > 0:
+                writer.append_data(frame)
         frame_counter=frame_counter+1
         if int(args.framelimit) > 0 and frame_counter > int(args.framelimit):
             writer.close()
@@ -156,7 +158,8 @@ else:
     for frame_counter, image in enumerate(reader):
         if frame_counter > int(args.framestart): 
             print('Processing frame ' + str(frame_counter) + ' of ' + totalImages)
-            detect(image)
+            image = detect(image)
+            writer.append_data(image)
             if int(args.framelimit) > 0 and frame_counter + 1 > int(args.framelimit):
                 break
     writer.close()
