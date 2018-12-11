@@ -31,11 +31,11 @@ When it comes to object detection, popular detection frameworks are
  
  Provided all the files are in the current directory, below command will apply object detection on the input image `dog.jpg`.
  
- `$ python yolo_opencv.py --input sampledata/commuters.mp4 --config cfg/yolov3.cfg --weights yolov3-tiny.weights --classes cfg/yolov3.txt`
+ `$ python yolo_opencv.py --input sampledata/commuters.mp4 --config cfg/yolov3.cfg --weights yolov3.weights --classes cfg/yolov3.txt`
  
  For RTSP simply put the RTSP URL as --input
  
-  `$ python yolo_opencv.py --input rtsp://184.72.239.149/vod/mp4:BigBuckBunny_175k.mov --config cfg/yolov3.cfg --weights yolov3-tiny.weights --classes cfg/yolov3.txt`
+  `$ python yolo_opencv.py --input rtsp://184.72.239.149/vod/mp4:BigBuckBunny_175k.mov --framestart 100 --framelimit 100 --config cfg/yolov3-tiny.cfg --weights yolov3-tiny.weights --classes cfg/yolov3.txt`
 
   (stream courtesy of [Wowza Demo RTSP](https://www.wowza.com/demo/rtsp) 
 

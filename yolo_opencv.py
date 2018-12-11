@@ -39,7 +39,7 @@ def get_output_layers(net):
 
     return output_layers
 
-def save_bounded_image(img, class_id, confidence, x, y, x_plus_w, y_plus_h):
+def save_bounded_image(image, class_id, confidence, x, y, x_plus_w, y_plus_h):
     label = str(classes[class_id])
     dirname = os.path.join(args.outputdir, label, datetime.datetime.now().strftime('%Y-%m-%d'))
     if not os.path.exists(dirname):
@@ -47,7 +47,7 @@ def save_bounded_image(img, class_id, confidence, x, y, x_plus_w, y_plus_h):
     
     filename = label + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S_%f') + '_conf' + "{:.2f}".format(confidence) + '.jpg'
     print ('Saving bounding box:' + filename)
-    roi = img[y:y_plus_h, x:x_plus_w]
+    roi = image[y:y_plus_h, x:x_plus_w]
     if roi.any():
         cv2.imwrite(os.path.join(dirname, filename), cv2.cvtColor(roi, cv2.COLOR_RGB2BGR))  
 
@@ -63,11 +63,6 @@ def detect(image):
     Width = image.shape[1]
     Height = image.shape[0]
     scale = 0.00392
-    
-    classes = None
-    
-    with open(args.classes, 'r') as f:
-        classes = [line.strip() for line in f.readlines()]
     
     net = cv2.dnn.readNet(args.weights, args.config)
     
@@ -116,10 +111,14 @@ def detect(image):
     writer.append_data(image)
 
 # Doing some Object Detection on a video
+classes = None
+
+with open(args.classes, 'r') as f:
+    classes = [line.strip() for line in f.readlines()]
 COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
 
 if args.input.startswith('rtsp'):
-    if args.framelimit > 0:
+    if int(args.framelimit) > 0:
         writer = imageio.get_writer(args.outputfile, fps = fps)
     cap = cv2.VideoCapture(args.input) 
     frame_counter = 0
@@ -127,10 +126,10 @@ if args.input.startswith('rtsp'):
         # Capture frame-by-frame
         print('Processing frame ' + str(frame_counter))
         ret, frame = cap.read()
-        if ret and frame_counter > args.framestart:
+        if ret and frame_counter > int(args.framestart):
             detect(frame)
         frame_counter=frame_counter+1
-        if args.framelimit > 0 and frame_counter > args.framelimit:
+        if int(args.framelimit) > 0 and frame_counter > int(args.framelimit):
             writer.close()
             break
 else:
@@ -140,10 +139,10 @@ else:
     totalImages = str(len(reader))
     
     for frame_counter, image in enumerate(reader):
-        if frame_counter > args.framestart: 
+        if frame_counter > int(args.framestart): 
             print('Processing frame ' + str(frame_counter) + ' of ' + totalImages)
             detect(image)
-            if args.framelimit > 0 and frame_counter + 1 > args.framelimit:
+            if int(args.framelimit) > 0 and frame_counter + 1 > int(args.framelimit):
                 break
     writer.close()
 
