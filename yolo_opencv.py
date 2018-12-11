@@ -21,9 +21,9 @@ ap.add_argument('-o', '--outputfile', required=False,
 ap.add_argument('-od', '--outputdir', required=False,
                 help = 'path to output folder', default = 'output')
 ap.add_argument('-fs', '--framestart', required=False,
-                help = 'start frame delay ', default=0)
+                help = 'start frame', default=0)
 ap.add_argument('-fl', '--framelimit', required=False,
-                help = 'limit of frames for process', default=0)
+                help = 'number of frames to process (0 = all)', default=0)
 ap.add_argument('-c', '--config', required=False,
                 help = 'path to yolo config file', default = 'cfg/yolov3.cfg')
 ap.add_argument('-w', '--weights', required=False,
@@ -31,7 +31,7 @@ ap.add_argument('-w', '--weights', required=False,
 ap.add_argument('-cl', '--classes', required=False,
                 help = 'path to text file containing class names',  default = 'cfg/yolov3.txt')
 ap.add_argument('-ic', '--invertcolor', required=False,
-                help = 'invert RGB 2 BGR',  default = 'false') 
+                help = 'invert RGB 2 BGR',  default = 'false')
 args = ap.parse_args()
 
 def str2bool(v):
@@ -135,20 +135,23 @@ COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
 if args.input.startswith('rtsp'):
     if int(args.framelimit) > 0:
         writer = imageio.get_writer(args.outputfile)
-    cap = cv2.VideoCapture(args.input) 
+    cap = cv2.VideoCapture(args.input)
     frame_counter = 0
     while(True):
-        # Capture frame-by-frame
-        print('Processing frame ' + str(frame_counter))
+        if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
+            writer.close()
+            break
         ret, frame = cap.read()
-        if ret and frame_counter > int(args.framestart):
+        if ret and frame_counter >= int(args.framestart):
+            print('Detecting objects in frame ' + str(frame_counter))
             frame = detect(frame)
             if int(args.framelimit) > 0:
                 writer.append_data(frame)
+        else:
+            print('Skipping frame ' + str(frame_counter))
+
         frame_counter=frame_counter+1
-        if int(args.framelimit) > 0 and frame_counter > int(args.framelimit):
-            writer.close()
-            break
+
 else:
     reader = imageio.get_reader(args.input)
     fps = reader.get_meta_data()['fps']
@@ -156,12 +159,15 @@ else:
     totalImages = str(len(reader))
     
     for frame_counter, image in enumerate(reader):
-        if frame_counter > int(args.framestart): 
-            print('Processing frame ' + str(frame_counter) + ' of ' + totalImages)
+        if frame_counter >= int(args.framestart): 
+            if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
+                break
+            print('Detecting objects in frame ' + str(frame_counter) + ' of ' + totalImages)
             image = detect(image)
             writer.append_data(image)
-            if int(args.framelimit) > 0 and frame_counter + 1 > int(args.framelimit):
-                break
+        else:
+            print('Skipping frame ' + str(frame_counter) + ' of ' + totalImages)
+
     writer.close()
 
 

@@ -36,9 +36,7 @@ When it comes to object detection, popular detection frameworks are
  
  For RTSP simply put the RTSP URL as --input
  
-  `$ python yolo_opencv.py --input rtsp://184.72.239.149/vod/mp4:BigBuckBunny_175k.mov --framestart 100 --framelimit 100 --config cfg/yolov3-tiny.cfg --weights yolov3-tiny.weights --classes cfg/yolov3.txt`
-
-  (stream courtesy of [Wowza Demo RTSP](https://www.wowza.com/demo/rtsp) 
+  `$ python yolo_opencv.py --input rtsp://xxxxx:1935/live/sys.stream --framestart 100 --framelimit 100 --config cfg/yolov3-tiny.cfg --weights yolov3-tiny.weights --classes cfg/yolov3.txt`
 
  **Command format** 
  
@@ -53,5 +51,3 @@ Checkout the object detection implementation available in [cvlib](http:cvlib.net
  This project is based on [Arun Ponnusamy's Object Detection OpenCV](https://github.com/arunponnusamy/object-detection-opencv)
  
  Sample video footage from [Videvo - Free Stock Video Footage](https://www.videvo.net/video/people-crossing-road-in-hong-kong-cbd/8162/)
-
- Sample RTSP stream courtesy of [Wowza Demo RTSP](https://www.wowza.com/demo/rtsp) 
