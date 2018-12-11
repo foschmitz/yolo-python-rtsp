@@ -50,8 +50,8 @@ When it comes to object detection, popular detection frameworks are
  | `config` | String  | /path/to/config/file  |
  | `weights` | String  | /path/to/weights/file  |
  | `classes`  | String | /path/to/classes/file |
- | `invertcolor` | String  | in case of BGR streams |
- | `fpsthrottle` | String  | in case of slower machines to keep up with a stream  |
+ | `invertcolor` | Boolean  | in case of BGR streams |
+ | `fpsthrottle` | Int  | in case of slower machines to keep up with a stream  |
  
  ### sample output :
  ![](object-detection.png)
