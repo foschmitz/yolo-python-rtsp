@@ -103,8 +103,8 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-sampledata/
 output/
 output.mp4
 yolov3.weights
+yolov3-tiny.weights
 object-detection.jpg

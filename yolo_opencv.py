@@ -1,7 +1,7 @@
 #############################################
-# Object detection - YOLO - OpenCV
-# Author : Arun Ponnusamy   (July 16, 2018)
-# Website : http://www.arunponnusamy.com
+# Object detection via RTSP - YOLO - OpenCV
+# Author : Frank Schmitz   (Dec 11, 2018)
+# Website : https://www.github.com/zishor
 ############################################
 
 import os
@@ -11,17 +11,23 @@ import numpy as np
 import imageio
 import datetime
 
-OUTPUT_DIR = "output"
-
 ap = argparse.ArgumentParser()
-ap.add_argument('-i', '--image', required=False,
-                help = 'path to input image', default = 'sampledata/frontdoor.mp4')
+ap.add_argument('-i', '--input', required=False,
+                help = 'path to input image', default = 'sampledata/commuters.mp4')
+ap.add_argument('-o', '--outputfile', required=False,
+                help = 'filename for output video', default='output.mp4')
+ap.add_argument('-od', '--outputdir', required=False,
+                help = 'path to output folder', default = 'output')
+ap.add_argument('-fs', '--framestart', required=False,
+                help = 'start frame delay ', default=0)
+ap.add_argument('-fl', '--framelimit', required=False,
+                help = 'limit of frames for process', default=0)
 ap.add_argument('-c', '--config', required=False,
-                help = 'path to yolo config file', default = 'yolov3.cfg')
+                help = 'path to yolo config file', default = 'cfg/yolov3.cfg')
 ap.add_argument('-w', '--weights', required=False,
                 help = 'path to yolo pre-trained weights', default = 'yolov3.weights')
 ap.add_argument('-cl', '--classes', required=False,
-                help = 'path to text file containing class names',  default = 'yolov3.txt')
+                help = 'path to text file containing class names',  default = 'cfg/yolov3.txt')
 args = ap.parse_args()
 
 
@@ -35,21 +41,22 @@ def get_output_layers(net):
 
 def save_bounded_image(img, class_id, confidence, x, y, x_plus_w, y_plus_h):
     label = str(classes[class_id])
-    dirname = os.path.join(OUTPUT_DIR, label, datetime.datetime.now().strftime('%Y-%m-%d'))
+    dirname = os.path.join(args.outputdir, label, datetime.datetime.now().strftime('%Y-%m-%d'))
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     
     filename = label + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S_%f') + '_conf' + "{:.2f}".format(confidence) + '.jpg'
     print ('Saving bounding box:' + filename)
-    roi = orgImg[y:y_plus_h, x:x_plus_w]
-    cv2.imwrite(os.path.join(dirname, filename), cv2.cvtColor(roi, cv2.COLOR_RGB2BGR))  
+    roi = img[y:y_plus_h, x:x_plus_w]
+    if roi.any():
+        cv2.imwrite(os.path.join(dirname, filename), cv2.cvtColor(roi, cv2.COLOR_RGB2BGR))  
 
 def draw_prediction(img, class_id, confidence, x, y, x_plus_w, y_plus_h):
     label = str(classes[class_id])
     color = COLORS[class_id]
 
-    cv2.rectangle(img, (x,y), (x_plus_w,y_plus_h), color, 2)
-    cv2.putText(img, label, (x-10,y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    cv2.rectangle(img, (x,y), (x_plus_w,y_plus_h), color, 3)
+    cv2.putText(img, label, (x-10,y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 3)
 
 def detect(image):
         
@@ -95,6 +102,7 @@ def detect(image):
     
     indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
     
+    orgImage = image.copy()
     for i in indices:
         i = i[0]
         box = boxes[i]
@@ -102,35 +110,41 @@ def detect(image):
         y = box[1]
         w = box[2]
         h = box[3]
+        save_bounded_image(orgImage, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
         draw_prediction(image, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
-        save_bounded_image(image, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
 
     writer.append_data(image)
 
 # Doing some Object Detection on a video
 COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
 
-#reader = imageio.get_reader(args.image)
-#fps = reader.get_meta_data()['fps']
-#writer = imageio.get_writer('output.mp4', fps = fps)
-#totalImages = str(len(reader))
+if args.input.startswith('rtsp'):
+    if args.framelimit > 0:
+        writer = imageio.get_writer(args.outputfile, fps = fps)
+    cap = cv2.VideoCapture(args.input) 
+    frame_counter = 0
+    while(True):
+        # Capture frame-by-frame
+        print('Processing frame ' + str(frame_counter))
+        ret, frame = cap.read()
+        if ret:
+            detect(frame)
+        frame_counter=frame_counter+1
+        if args.framelimit > 0 and frame_counter > args.framelimit:
+            writer.close()
+            break
+else:
+    reader = imageio.get_reader(args.input)
+    fps = reader.get_meta_data()['fps']
+    writer = imageio.get_writer(args.outputfile, fps = fps)
+    totalImages = str(len(reader))
+    
+    for frame_counter, image in enumerate(reader):
+        if frame_counter > args.framestart: 
+            print('Processing frame ' + str(frame_counter) + ' of ' + totalImages)
+            detect(image)
+            if args.framelimit > 0 and frame_counter + 1 > args.framelimit:
+                break
+    writer.close()
 
-#for i, image in enumerate(reader):
-#    if i > 110 and i < 250:
-#        detect(image)
-# writer.close()
 
-writer = imageio.get_writer('output.mp4', fps = fps)
-cap = cv2.VideoCapture('rtsp://192.168.0.210:7447/xxx') 
-frame_counter = 0
-while(True):
-    # Capture frame-by-frame
-    print('Processing frame ' + str(frame_counter))
-    ret, frame = cap.read()
-    if not frame is None:
-        detect(frame)
-    frame_counter=frame_counter+1
-    if frame_counter > 150:
-        break
-       
-writer.close()
