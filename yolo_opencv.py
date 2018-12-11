@@ -11,6 +11,8 @@ import numpy as np
 import imageio
 import datetime
 
+imageio.plugins.ffmpeg.download()
+
 ap = argparse.ArgumentParser()
 ap.add_argument('-i', '--input', required=False,
                 help = 'path to input image', default = 'sampledata/commuters.mp4')
