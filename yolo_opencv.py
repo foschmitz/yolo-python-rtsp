@@ -127,7 +127,7 @@ if args.input.startswith('rtsp'):
         # Capture frame-by-frame
         print('Processing frame ' + str(frame_counter))
         ret, frame = cap.read()
-        if ret:
+        if ret and frame_counter > args.framestart:
             detect(frame)
         frame_counter=frame_counter+1
         if args.framelimit > 0 and frame_counter > args.framelimit:
