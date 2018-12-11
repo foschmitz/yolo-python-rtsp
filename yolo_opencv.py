@@ -32,6 +32,8 @@ ap.add_argument('-cl', '--classes', required=False,
                 help = 'path to text file containing class names',  default = 'cfg/yolov3.txt')
 ap.add_argument('-ic', '--invertcolor', required=False,
                 help = 'invert RGB 2 BGR',  default = 'false')
+ap.add_argument('-fpt', '--fpsthrottle', required=False,
+                help = 'skips (int) x frames in order to catch up with the stream for slow machines 1 = no throttle',  default = 1)
 args = ap.parse_args()
 
 def str2bool(v):
@@ -141,15 +143,18 @@ if args.input.startswith('rtsp'):
         if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
             writer.close()
             break
-        ret, frame = cap.read()
-        if ret and frame_counter >= int(args.framestart):
-            print('Detecting objects in frame ' + str(frame_counter))
-            frame = detect(frame)
-            if int(args.framelimit) > 0:
-                writer.append_data(frame)
+        
+        if frame_counter % int(args.fpsthrottle) ==0:
+            ret, frame = cap.read()
+            if ret and frame_counter >= int(args.framestart):
+                print('Detecting objects in frame ' + str(frame_counter))
+                frame = detect(frame)
+                if int(args.framelimit) > 0:
+                    writer.append_data(frame)
+            else:
+                print('Skipping frame ' + str(frame_counter))
         else:
-            print('Skipping frame ' + str(frame_counter))
-
+            print('FPS throttling. Skipping frame ' + str(frame_counter))
         frame_counter=frame_counter+1
 
 else:
