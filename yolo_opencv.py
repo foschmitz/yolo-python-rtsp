@@ -30,8 +30,17 @@ ap.add_argument('-w', '--weights', required=False,
                 help = 'path to yolo pre-trained weights', default = 'yolov3.weights')
 ap.add_argument('-cl', '--classes', required=False,
                 help = 'path to text file containing class names',  default = 'cfg/yolov3.txt')
+ap.add_argument('-ic', '--invertcolor', required=False,
+                help = 'invert RGB 2 BGR',  default = 'false') 
 args = ap.parse_args()
 
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def get_output_layers(net):
     
@@ -51,7 +60,9 @@ def save_bounded_image(image, class_id, confidence, x, y, x_plus_w, y_plus_h):
     print ('Saving bounding box:' + filename)
     roi = image[y:y_plus_h, x:x_plus_w]
     if roi.any():
-        cv2.imwrite(os.path.join(dirname, filename), cv2.cvtColor(roi, cv2.COLOR_RGB2BGR))  
+        if str2bool(args.invertcolor) == False:
+            roi = cv2.cvtColor(roi, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(os.path.join(dirname, filename), roi)  
 
 def draw_prediction(img, class_id, confidence, x, y, x_plus_w, y_plus_h):
     label = str(classes[class_id])
@@ -110,6 +121,8 @@ def detect(image):
         save_bounded_image(orgImage, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
         draw_prediction(image, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
 
+    if str2bool(args.invertcolor) == True:
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     writer.append_data(image)
 
 # Doing some Object Detection on a video
@@ -121,7 +134,7 @@ COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
 
 if args.input.startswith('rtsp'):
     if int(args.framelimit) > 0:
-        writer = imageio.get_writer(args.outputfile, fps = fps)
+        writer = imageio.get_writer(args.outputfile)
     cap = cv2.VideoCapture(args.input) 
     frame_counter = 0
     while(True):

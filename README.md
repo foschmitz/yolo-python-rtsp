@@ -42,7 +42,7 @@ When it comes to object detection, popular detection frameworks are
 
  **Command format** 
  
- _$ python yolo_opencv.py --input /path/to/input/stream --outputfile /path/to/outputfile --outputdir /path/to/outputdir --framestart 0 (start detecting at frame x (int))  --framelimit 0 (stop after x (int) frames and save the video in case of streams. 0 no limit) --config /path/to/config/file --weights /path/to/weights/file --classes /path/to/classes/file_
+ _$ python yolo_opencv.py --input /path/to/input/stream --outputfile /path/to/outputfile --outputdir /path/to/outputdir --framestart 0 (start detecting at frame x (int))  --framelimit 0 (stop after x (int) frames and save the video in case of streams. 0 no limit) --config /path/to/config/file --weights /path/to/weights/file --classes /path/to/classes/file_--invertcolor true|false (in case of BGR streams)
  
  ### sample output :
  ![](object-detection.png)
