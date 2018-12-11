@@ -38,9 +38,20 @@ When it comes to object detection, popular detection frameworks are
  
   `$ python yolo_opencv.py --input rtsp://xxxxx:1935/live/sys.stream --framestart 100 --framelimit 100 --config cfg/yolov3-tiny.cfg --weights yolov3-tiny.weights --classes cfg/yolov3.txt`
 
- **Command format** 
+ **Arguments** 
  
- _$ python yolo_opencv.py --input /path/to/input/stream --outputfile /path/to/outputfile --outputdir /path/to/outputdir --framestart 0 (start detecting at frame x (int))  --framelimit 0 (stop after x (int) frames and save the video in case of streams. 0 no limit) --config /path/to/config/file --weights /path/to/weights/file --classes /path/to/classes/file_--invertcolor true|false (in case of BGR streams)
+ | parameter | type    | description                                      |
+ | --------- | ------- | ------------------------------------------------ |
+ | `input`     | String  | /path/to/input/stream |
+ | `outputfile`  | String | /path/to/outputfile |
+ | `outputdir` | String  | /path/to/outputdir  |
+ | `framestart` | Int  | start detecting at frame x (int) |
+ | `framelimit` | Int  | stop after x (int) frames and save the video in case of streams. 0 no limit |
+ | `config` | String  | /path/to/config/file  |
+ | `weights` | String  | /path/to/weights/file  |
+ | `classes`  | String | /path/to/classes/file |
+ | `invertcolor` | String  | in case of BGR streams |
+ | `fpsthrottle` | String  | in case of slower machines to keep up with a stream  |
  
  ### sample output :
  ![](object-detection.png)
