@@ -5,6 +5,7 @@
 ############################################
 
 import os
+import os.path
 import cv2
 import argparse
 import numpy as np
@@ -15,7 +16,7 @@ imageio.plugins.ffmpeg.download()
 
 ap = argparse.ArgumentParser()
 ap.add_argument('-i', '--input', required=False,
-                help = 'path to input image', default = 'sampledata/commuters.mp4')
+                help = 'path to input image', default = 'sampledata')
 ap.add_argument('-o', '--outputfile', required=False,
                 help = 'filename for output video', default='output.mp4')
 ap.add_argument('-od', '--outputdir', required=False,
@@ -125,7 +126,23 @@ def detect(image):
     if str2bool(args.invertcolor) == True:
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     return image
+
+def processvideo(reader):
+    fps = reader.get_meta_data()['fps']
+    writer = imageio.get_writer(args.outputfile, fps = fps)
+    totalImages = str(len(reader))
     
+    for frame_counter, image in enumerate(reader):
+        if frame_counter >= int(args.framestart): 
+            if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
+                break
+            print('Detecting objects in frame ' + str(frame_counter) + ' of ' + totalImages)
+            image = detect(image)
+            writer.append_data(image)
+        else:
+            print('Skipping frame ' + str(frame_counter) + ' of ' + totalImages)
+
+    writer.close()
 
 # Doing some Object Detection on a video
 classes = None
@@ -158,21 +175,14 @@ if args.input.startswith('rtsp'):
         frame_counter=frame_counter+1
 
 else:
-    reader = imageio.get_reader(args.input)
-    fps = reader.get_meta_data()['fps']
-    writer = imageio.get_writer(args.outputfile, fps = fps)
-    totalImages = str(len(reader))
-    
-    for frame_counter, image in enumerate(reader):
-        if frame_counter >= int(args.framestart): 
-            if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
-                break
-            print('Detecting objects in frame ' + str(frame_counter) + ' of ' + totalImages)
-            image = detect(image)
-            writer.append_data(image)
-        else:
-            print('Skipping frame ' + str(frame_counter) + ' of ' + totalImages)
-
-    writer.close()
+    if os.path.isdir(args.input):
+        for dirpath, dirnames, filenames in os.walk(args.input):
+            for filename in [f for f in filenames if f.endswith(".mp4")]:
+                reader = imageio.get_reader(args.input)
+                processvideo(reader)
+    else:
+        reader = imageio.get_reader(args.input)
+        processvideo(reader)
+        
 
 
