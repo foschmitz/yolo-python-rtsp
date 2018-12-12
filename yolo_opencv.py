@@ -128,25 +128,28 @@ def detect(image):
     return image
 
 def processvideo(reader):
-    fps = reader.get_meta_data()['fps']
-    writer = imageio.get_writer(args.outputfile, fps = fps)
-    totalImages = str(len(reader))
     
-    for frame_counter, image in enumerate(reader):
-        if frame_counter >= int(args.framestart): 
-            try:
-                if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
-                    break
-                print('Detecting objects in frame ' + str(frame_counter) + ' of ' + totalImages)
-                image = detect(image)
-                writer.append_data(image)
-            except RuntimeError:
-                pass
-        else:
-            print('Skipping frame ' + str(frame_counter) + ' of ' + totalImages)
+    try:
+        fps = reader.get_meta_data()['fps']
+        writer = imageio.get_writer(args.outputfile, fps = fps)
+        totalImages = str(len(reader))
+        
+        for frame_counter, image in enumerate(reader):
+            if frame_counter >= int(args.framestart): 
+                
+                    if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
+                        break
+                    print('Detecting objects in frame ' + str(frame_counter) + ' of ' + totalImages)
+                    image = detect(image)
+                    writer.append_data(image)
     
-    writer.close()
-
+            else:
+                print('Skipping frame ' + str(frame_counter) + ' of ' + totalImages)
+        writer.close()
+    except RuntimeError:
+        writer.close()
+        pass
+    
 # Doing some Object Detection on a video
 classes = None
 
