@@ -178,6 +178,7 @@ else:
     if os.path.isdir(args.input):
         for dirpath, dirnames, filenames in os.walk(args.input):
             for filename in [f for f in filenames if f.endswith(".mp4")]:
+                print('Processing video ' + os.path.join(dirpath, filename))
                 reader = imageio.get_reader(os.path.join(dirpath, filename))
                 processvideo(reader)
     else:
