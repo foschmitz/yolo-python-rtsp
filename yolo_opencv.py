@@ -134,14 +134,17 @@ def processvideo(reader):
     
     for frame_counter, image in enumerate(reader):
         if frame_counter >= int(args.framestart): 
-            if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
-                break
-            print('Detecting objects in frame ' + str(frame_counter) + ' of ' + totalImages)
-            image = detect(image)
-            writer.append_data(image)
+            try:
+                if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
+                    break
+                print('Detecting objects in frame ' + str(frame_counter) + ' of ' + totalImages)
+                image = detect(image)
+                writer.append_data(image)
+            except RuntimeError:
+                pass
         else:
             print('Skipping frame ' + str(frame_counter) + ' of ' + totalImages)
-
+    
     writer.close()
 
 # Doing some Object Detection on a video
