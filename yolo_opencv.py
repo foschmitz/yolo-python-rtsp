@@ -134,7 +134,7 @@ def processvideo(file):
     while(cap.isOpened()):
         ret, frame = cap.read()
         print('Detecting objects in frame')
-        if frame.any():
+        if not frame is None:
             image = detect(frame)
             writer.append_data(frame)
 
