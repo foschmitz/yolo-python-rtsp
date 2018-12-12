@@ -26,9 +26,9 @@ ap.add_argument('-fs', '--framestart', required=False,
 ap.add_argument('-fl', '--framelimit', required=False,
                 help = 'number of frames to process (0 = all)', default=0)
 ap.add_argument('-c', '--config', required=False,
-                help = 'path to yolo config file', default = 'cfg/yolov3.cfg')
+                help = 'path to yolo config file', default = 'cfg/yolov3-tiny.cfg')
 ap.add_argument('-w', '--weights', required=False,
-                help = 'path to yolo pre-trained weights', default = 'yolov3.weights')
+                help = 'path to yolo pre-trained weights', default = 'yolov3-tiny.weights')
 ap.add_argument('-cl', '--classes', required=False,
                 help = 'path to text file containing class names',  default = 'cfg/yolov3.txt')
 ap.add_argument('-ic', '--invertcolor', required=False,
@@ -130,14 +130,16 @@ def detect(image):
 def processvideo(file):
     cap = cv2.VideoCapture(file)
     writer = imageio.get_writer(args.outputfile)
-
+    frame_counter = 0
     while(cap.isOpened()):
+        frame_counter = frame_counter + 1
         ret, frame = cap.read()
-        print('Detecting objects in frame')
+        print('Detecting objects in frame ' + str(frame_counter))
         if not frame is None:
             image = detect(frame)
             writer.append_data(frame)
-
+        else:
+            print('Frame error in frame ' + str(frame_counter))
     cap.release()
     writer.close()
     
