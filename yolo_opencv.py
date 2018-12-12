@@ -127,28 +127,18 @@ def detect(image):
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     return image
 
-def processvideo(reader):
-    
-    try:
-        fps = reader.get_meta_data()['fps']
-        writer = imageio.get_writer(args.outputfile, fps = fps)
-        totalImages = str(len(reader))
-        
-        for frame_counter, image in enumerate(reader):
-            if frame_counter >= int(args.framestart): 
-                
-                    if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
-                        break
-                    print('Detecting objects in frame ' + str(frame_counter) + ' of ' + totalImages)
-                    image = detect(image)
-                    writer.append_data(image)
-    
-            else:
-                print('Skipping frame ' + str(frame_counter) + ' of ' + totalImages)
-        writer.close()
-    except RuntimeError:
-        writer.close()
-        pass
+def processvideo(file):
+    cap = cv2.VideoCapture(file)
+    writer = imageio.get_writer(args.outputfile)
+
+    while(cap.isOpened()):
+        ret, frame = cap.read()
+        print('Detecting objects in frame')
+        image = detect(frame)
+        writer.append_data(frame)
+
+    cap.release()
+    writer.close()
     
 # Doing some Object Detection on a video
 classes = None
@@ -185,8 +175,7 @@ else:
         for dirpath, dirnames, filenames in os.walk(args.input):
             for filename in [f for f in filenames if f.endswith(".mp4")]:
                 print('Processing video ' + os.path.join(dirpath, filename))
-                reader = imageio.get_reader(os.path.join(dirpath, filename))
-                processvideo(reader)
+                processvideo(os.path.join(dirpath, filename))
     else:
         reader = imageio.get_reader(args.input)
         processvideo(reader)
