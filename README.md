@@ -16,9 +16,11 @@ When it comes to object detection, popular detection frameworks are
  ## Dependencies
   * opencv
   * numpy
-  * imageio
+  * imageio ( version 2.4.1 )
   
 `pip install numpy opencv-python imageio`
+`sudo pip3 install imageio==2.4.1`
+
 
 **Note: Python 2.x is not supported**
 
