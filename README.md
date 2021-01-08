@@ -30,7 +30,7 @@ When it comes to object detection, popular detection frameworks are
 
  `$ wget https://pjreddie.com/media/files/yolov3-tiny.weights`
 
- Provided all the files are in the current directory, below command will apply object detection on the input image `dog.jpg`.
+ Provided all the files are in the current directory, below command will apply object detection on the input video `commuters.mp4`.
 
  `$ python yolo_opencv.py --input sampledata/commuters.mp4 --config cfg/yolov3-tiny.cfg --weights yolov3-tiny.weights --classes cfg/yolov3.txt`
 
