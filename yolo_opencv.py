@@ -100,8 +100,10 @@ def detect(image, net):
                 center_y = int(detection[1] * Height)
                 w = int(detection[2] * Width)
                 h = int(detection[3] * Height)
-                x = center_x - w / 2
-                y = center_y - h / 2
+                x = max(0, center_x - w / 2)
+                y = max(0, center_y - h / 2)
+                w = min(w, Width - x)
+                h = min(h, Height - y)
                 class_ids.append(class_id)
                 confidences.append(float(confidence))
                 boxes.append([x, y, w, h])
@@ -122,18 +124,23 @@ def detect(image, net):
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     return image
 
-def processvideo(file, net):
+def processvideo(file, net, outputfile, framestart=0, framelimit=0):
     cap = cv2.VideoCapture(file)
 
-    writer = imageio.write_frames(args.outputfile, (int(cap.get(3)), int(cap.get(4))))
+    writer = imageio.write_frames(outputfile, (int(cap.get(3)), int(cap.get(4))))
     writer.send(None)
     frame_counter = 0
     while(cap.isOpened()):
         frame_counter = frame_counter + 1
+        if framelimit > 0 and frame_counter > framestart + framelimit:
+            break
         ret, frame = cap.read()
-        print('Detecting objects in frame ' + str(frame_counter))
         if ret==True:
-            if not frame is None:
+            if frame_counter < framestart:
+                print('Skipping frame ' + str(frame_counter))
+                continue
+            print('Detecting objects in frame ' + str(frame_counter))
+            if frame is not None:
                 image = detect(frame, net)
                 writer.send(image)
             else:
@@ -167,29 +174,43 @@ if args.input.startswith('rtsp'):
         writer = imageio.write_frames(args.outputfile, (int(cap.get(3)), int(cap.get(4))))
         writer.send(None)
     frame_counter = 0
-    while(True):
-        if args.framelimit > 0 and frame_counter > args.framestart + args.framelimit:
-            writer.close()
-            break
+    try:
+        while(True):
+            if args.framelimit > 0 and frame_counter > args.framestart + args.framelimit:
+                break
 
-        if frame_counter % args.fpsthrottle == 0:
-            ret, frame = cap.read()
-            if ret and frame_counter >= args.framestart:
-                print('Detecting objects in frame ' + str(frame_counter))
-                frame = detect(frame, net)
-                if args.framelimit > 0:
-                    writer.send(frame)
+            if frame_counter % args.fpsthrottle == 0:
+                ret, frame = cap.read()
+                if ret and frame_counter >= args.framestart:
+                    print('Detecting objects in frame ' + str(frame_counter))
+                    frame = detect(frame, net)
+                    if args.framelimit > 0:
+                        writer.send(frame)
+                else:
+                    print('Skipping frame ' + str(frame_counter))
             else:
-                print('Skipping frame ' + str(frame_counter))
-        else:
-            print('FPS throttling. Skipping frame ' + str(frame_counter))
-        frame_counter=frame_counter+1
+                print('FPS throttling. Skipping frame ' + str(frame_counter))
+            frame_counter=frame_counter+1
+    except KeyboardInterrupt:
+        print('\nInterrupted by user')
+    finally:
+        cap.release()
+        if args.framelimit > 0:
+            writer.close()
 
 else:
     if os.path.isdir(args.input):
+        video_files = []
         for dirpath, dirnames, filenames in os.walk(args.input):
             for filename in [f for f in filenames if f.endswith(".mp4")]:
-                print('Processing video ' + os.path.join(dirpath, filename))
-                processvideo(os.path.join(dirpath, filename), net)
+                video_files.append(os.path.join(dirpath, filename))
+        for idx, video_path in enumerate(video_files):
+            base, ext = os.path.splitext(args.outputfile)
+            if len(video_files) > 1:
+                outputfile = base + '_' + str(idx) + ext
+            else:
+                outputfile = args.outputfile
+            print('Processing video ' + video_path)
+            processvideo(video_path, net, outputfile, args.framestart, args.framelimit)
     else:
-        processvideo(os.path.join(args.input), net)
+        processvideo(args.input, net, args.outputfile, args.framestart, args.framelimit)
