@@ -20,9 +20,9 @@ ap.add_argument('-o', '--outputfile', required=False,
 ap.add_argument('-od', '--outputdir', required=False,
                 help = 'path to output folder', default = 'output')
 ap.add_argument('-fs', '--framestart', required=False,
-                help = 'start frame', default=0)
+                help = 'start frame', type=int, default=0)
 ap.add_argument('-fl', '--framelimit', required=False,
-                help = 'number of frames to process (0 = all)', default=0)
+                help = 'number of frames to process (0 = all)', type=int, default=0)
 ap.add_argument('-c', '--config', required=False,
                 help = 'path to yolo config file', default = 'cfg/yolov3-tiny.cfg')
 ap.add_argument('-w', '--weights', required=False,
@@ -32,7 +32,7 @@ ap.add_argument('-cl', '--classes', required=False,
 ap.add_argument('-ic', '--invertcolor', required=False,
                 help = 'invert RGB 2 BGR',  default = 'False')
 ap.add_argument('-fpt', '--fpsthrottle', required=False,
-                help = 'skips (int) x frames in order to catch up with the stream for slow machines 1 = no throttle',  default = 1)
+                help = 'skips (int) x frames in order to catch up with the stream for slow machines 1 = no throttle', type=int, default=1)
 args = ap.parse_args()
 
 def str2bool(v):
@@ -47,7 +47,7 @@ def get_output_layers(net):
 
     layer_names = net.getLayerNames()
 
-    output_layers = [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+    output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
     return output_layers
 
@@ -72,13 +72,11 @@ def draw_prediction(img, class_id, confidence, x, y, x_plus_w, y_plus_h):
     cv2.rectangle(img, (x,y), (x_plus_w,y_plus_h), color, 3)
     cv2.putText(img, label, (x-10,y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 3)
 
-def detect(image):
+def detect(image, net):
 
     Width = image.shape[1]
     Height = image.shape[0]
     scale = 0.00392
-
-    net = cv2.dnn.readNet(args.weights, args.config)
 
     blob = cv2.dnn.blobFromImage(image, scale, (416,416), (0,0,0), True, crop=False)
 
@@ -113,7 +111,6 @@ def detect(image):
 
     orgImage = image.copy()
     for i in indices:
-        i = i[0]
         box = boxes[i]
         x = box[0]
         y = box[1]
@@ -125,7 +122,7 @@ def detect(image):
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     return image
 
-def processvideo(file):
+def processvideo(file, net):
     cap = cv2.VideoCapture(file)
 
     writer = imageio.write_frames(args.outputfile, (int(cap.get(3)), int(cap.get(4))))
@@ -137,8 +134,8 @@ def processvideo(file):
         print('Detecting objects in frame ' + str(frame_counter))
         if ret==True:
             if not frame is None:
-                image = detect(frame)
-                writer.send(frame)
+                image = detect(frame, net)
+                writer.send(image)
             else:
                 print('Frame error in frame ' + str(frame_counter))
         else:
@@ -153,24 +150,34 @@ with open(args.classes, 'r') as f:
     classes = [line.strip() for line in f.readlines()]
 COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
 
+if not os.path.isfile(args.weights):
+    print('Error: weights file not found: ' + args.weights)
+    print('Download weights with: wget https://pjreddie.com/media/files/yolov3-tiny.weights')
+    exit(1)
+if not os.path.isfile(args.config):
+    print('Error: config file not found: ' + args.config)
+    exit(1)
+
+net = cv2.dnn.readNet(args.weights, args.config)
+
 if args.input.startswith('rtsp'):
 
     cap = cv2.VideoCapture(args.input)
-    if int(args.framelimit) > 0:
+    if args.framelimit > 0:
         writer = imageio.write_frames(args.outputfile, (int(cap.get(3)), int(cap.get(4))))
         writer.send(None)
     frame_counter = 0
     while(True):
-        if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
+        if args.framelimit > 0 and frame_counter > args.framestart + args.framelimit:
             writer.close()
             break
 
-        if frame_counter % int(args.fpsthrottle) ==0:
+        if frame_counter % args.fpsthrottle == 0:
             ret, frame = cap.read()
-            if ret and frame_counter >= int(args.framestart):
+            if ret and frame_counter >= args.framestart:
                 print('Detecting objects in frame ' + str(frame_counter))
-                frame = detect(frame)
-                if int(args.framelimit) > 0:
+                frame = detect(frame, net)
+                if args.framelimit > 0:
                     writer.send(frame)
             else:
                 print('Skipping frame ' + str(frame_counter))
@@ -183,6 +190,6 @@ else:
         for dirpath, dirnames, filenames in os.walk(args.input):
             for filename in [f for f in filenames if f.endswith(".mp4")]:
                 print('Processing video ' + os.path.join(dirpath, filename))
-                processvideo(os.path.join(dirpath, filename))
+                processvideo(os.path.join(dirpath, filename), net)
     else:
-        processvideo(os.path.join(args.input))
+        processvideo(os.path.join(args.input), net)
