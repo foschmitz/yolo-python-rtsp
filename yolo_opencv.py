@@ -6,36 +6,17 @@
 
 import os
 import os.path
+import sys
 import cv2
 import argparse
 import numpy as np
 import imageio_ffmpeg as imageio
 import datetime
 
-ap = argparse.ArgumentParser()
-ap.add_argument('-i', '--input', required=False,
-                help = 'path to input image', default = 'sampledata')
-ap.add_argument('-o', '--outputfile', required=False,
-                help = 'filename for output video', default='output.mp4')
-ap.add_argument('-od', '--outputdir', required=False,
-                help = 'path to output folder', default = 'output')
-ap.add_argument('-fs', '--framestart', required=False,
-                help = 'start frame', type=int, default=0)
-ap.add_argument('-fl', '--framelimit', required=False,
-                help = 'number of frames to process (0 = all)', type=int, default=0)
-ap.add_argument('-c', '--config', required=False,
-                help = 'path to yolo config file', default = 'cfg/yolov3-tiny.cfg')
-ap.add_argument('-w', '--weights', required=False,
-                help = 'path to yolo pre-trained weights', default = 'yolov3-tiny.weights')
-ap.add_argument('-cl', '--classes', required=False,
-                help = 'path to text file containing class names',  default = 'cfg/yolov3.txt')
-ap.add_argument('-ic', '--invertcolor', required=False,
-                help = 'invert RGB 2 BGR',  default = 'False')
-ap.add_argument('-fpt', '--fpsthrottle', required=False,
-                help = 'skips (int) x frames in order to catch up with the stream for slow machines 1 = no throttle', type=int, default=1)
-args = ap.parse_args()
 
 def str2bool(v):
+    if isinstance(v, bool):
+        return v
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True
     elif v.lower() in ('no', 'false', 'f', 'n', '0'):
@@ -43,46 +24,68 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def get_output_layers(net):
 
-    layer_names = net.getLayerNames()
+def parse_args():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-i', '--input', required=False,
+                    help='path to input image', default='sampledata')
+    ap.add_argument('-o', '--outputfile', required=False,
+                    help='filename for output video', default='output.mp4')
+    ap.add_argument('-od', '--outputdir', required=False,
+                    help='path to output folder', default='output')
+    ap.add_argument('-fs', '--framestart', required=False,
+                    help='start frame', type=int, default=0)
+    ap.add_argument('-fl', '--framelimit', required=False,
+                    help='number of frames to process (0 = all)', type=int, default=0)
+    ap.add_argument('-c', '--config', required=False,
+                    help='path to yolo config file', default='cfg/yolov3-tiny.cfg')
+    ap.add_argument('-w', '--weights', required=False,
+                    help='path to yolo pre-trained weights', default='yolov3-tiny.weights')
+    ap.add_argument('-cl', '--classes', required=False,
+                    help='path to text file containing class names', default='cfg/yolov3.txt')
+    ap.add_argument('-ic', '--invertcolor', required=False,
+                    help='invert RGB 2 BGR', type=str2bool, default=False)
+    ap.add_argument('-fpt', '--fpsthrottle', required=False,
+                    help='skips (int) x frames in order to catch up with the stream for slow machines 1 = no throttle',
+                    type=int, default=1)
+    return ap.parse_args()
 
-    output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
-    return output_layers
-
-def save_bounded_image(image, class_id, confidence, x, y, x_plus_w, y_plus_h):
+def save_bounded_image(image, class_id, confidence, x, y, x_plus_w, y_plus_h, classes, outputdir, invertcolor):
     label = str(classes[class_id])
-    dirname = os.path.join(args.outputdir, label, datetime.datetime.now().strftime('%Y-%m-%d'))
+    now = datetime.datetime.now()
+    dirname = os.path.join(outputdir, label, now.strftime('%Y-%m-%d'))
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    filename = label + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S_%f') + '_conf' + "{:.2f}".format(confidence) + '.jpg'
-    print ('Saving bounding box:' + filename)
+    filename = label + '_' + now.strftime('%Y-%m-%d_%H_%M_%S_%f') + '_conf' + "{:.2f}".format(confidence) + '.jpg'
+    print('Saving bounding box:' + filename)
     roi = image[y:y_plus_h, x:x_plus_w]
     if roi.any():
-        if str2bool(args.invertcolor) == False:
+        if not invertcolor:
             roi = cv2.cvtColor(roi, cv2.COLOR_RGB2BGR)
         cv2.imwrite(os.path.join(dirname, filename), roi)
 
-def draw_prediction(img, class_id, confidence, x, y, x_plus_w, y_plus_h):
+
+def draw_prediction(img, class_id, confidence, x, y, x_plus_w, y_plus_h, classes, colors):
     label = str(classes[class_id])
-    color = COLORS[class_id]
+    color = colors[class_id]
 
-    cv2.rectangle(img, (x,y), (x_plus_w,y_plus_h), color, 3)
-    cv2.putText(img, label, (x-10,y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 3)
+    cv2.rectangle(img, (x, y), (x_plus_w, y_plus_h), color, 3)
+    cv2.putText(img, label, (x - 10, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 3)
 
-def detect(image, net):
+
+def detect(image, net, output_layer_names, classes, colors, outputdir, invertcolor):
 
     Width = image.shape[1]
     Height = image.shape[0]
     scale = 0.00392
 
-    blob = cv2.dnn.blobFromImage(image, scale, (416,416), (0,0,0), True, crop=False)
+    blob = cv2.dnn.blobFromImage(image, scale, (416, 416), (0, 0, 0), True, crop=False)
 
     net.setInput(blob)
 
-    outs = net.forward(get_output_layers(net))
+    outs = net.forward(output_layer_names)
 
     class_ids = []
     confidences = []
@@ -108,23 +111,34 @@ def detect(image, net):
                 confidences.append(float(confidence))
                 boxes.append([x, y, w, h])
 
-
     indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
 
-    orgImage = image.copy()
+    # Save crops from original before drawing annotations
     for i in indices:
         box = boxes[i]
         x = box[0]
         y = box[1]
         w = box[2]
         h = box[3]
-        save_bounded_image(orgImage, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
-        draw_prediction(image, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
-    if str2bool(args.invertcolor) == True:
+        save_bounded_image(image, class_ids[i], confidences[i], round(x), round(y), round(x + w), round(y + h),
+                           classes, outputdir, invertcolor)
+
+    for i in indices:
+        box = boxes[i]
+        x = box[0]
+        y = box[1]
+        w = box[2]
+        h = box[3]
+        draw_prediction(image, class_ids[i], confidences[i], round(x), round(y), round(x + w), round(y + h),
+                        classes, colors)
+
+    if invertcolor:
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     return image
 
-def processvideo(file, net, outputfile, framestart=0, framelimit=0):
+
+def processvideo(file, net, output_layer_names, classes, colors, outputfile, outputdir, invertcolor,
+                 framestart=0, framelimit=0):
     cap = cv2.VideoCapture(file)
 
     writer = imageio.write_frames(outputfile, (int(cap.get(3)), int(cap.get(4))))
@@ -135,13 +149,13 @@ def processvideo(file, net, outputfile, framestart=0, framelimit=0):
         if framelimit > 0 and frame_counter > framestart + framelimit:
             break
         ret, frame = cap.read()
-        if ret==True:
+        if ret == True:
             if frame_counter < framestart:
                 print('Skipping frame ' + str(frame_counter))
                 continue
             print('Detecting objects in frame ' + str(frame_counter))
             if frame is not None:
-                image = detect(frame, net)
+                image = detect(frame, net, output_layer_names, classes, colors, outputdir, invertcolor)
                 writer.send(image)
             else:
                 print('Frame error in frame ' + str(frame_counter))
@@ -150,67 +164,88 @@ def processvideo(file, net, outputfile, framestart=0, framelimit=0):
     cap.release()
     writer.close()
 
-# Doing some Object Detection on a video
-classes = None
 
-with open(args.classes, 'r') as f:
-    classes = [line.strip() for line in f.readlines()]
-COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
+def is_stream_url(input_path):
+    stream_prefixes = ('rtsp://', 'rtsps://', 'rtmp://', 'http://', 'https://')
+    return any(input_path.startswith(p) for p in stream_prefixes)
 
-if not os.path.isfile(args.weights):
-    print('Error: weights file not found: ' + args.weights)
-    print('Download weights with: wget https://pjreddie.com/media/files/yolov3-tiny.weights')
-    exit(1)
-if not os.path.isfile(args.config):
-    print('Error: config file not found: ' + args.config)
-    exit(1)
 
-net = cv2.dnn.readNet(args.weights, args.config)
+def main():
+    args = parse_args()
 
-if args.input.startswith('rtsp'):
+    with open(args.classes, 'r') as f:
+        classes = [line.strip() for line in f.readlines()]
+    colors = np.random.uniform(0, 255, size=(len(classes), 3))
 
-    cap = cv2.VideoCapture(args.input)
-    if args.framelimit > 0:
-        writer = imageio.write_frames(args.outputfile, (int(cap.get(3)), int(cap.get(4))))
-        writer.send(None)
-    frame_counter = 0
-    try:
-        while(True):
-            if args.framelimit > 0 and frame_counter > args.framestart + args.framelimit:
-                break
+    if not os.path.isfile(args.weights):
+        print('Error: weights file not found: ' + args.weights)
+        print('Download weights with: wget https://pjreddie.com/media/files/yolov3-tiny.weights')
+        sys.exit(1)
+    if not os.path.isfile(args.config):
+        print('Error: config file not found: ' + args.config)
+        sys.exit(1)
 
-            if frame_counter % args.fpsthrottle == 0:
-                ret, frame = cap.read()
-                if ret and frame_counter >= args.framestart:
-                    print('Detecting objects in frame ' + str(frame_counter))
-                    frame = detect(frame, net)
-                    if args.framelimit > 0:
-                        writer.send(frame)
-                else:
-                    print('Skipping frame ' + str(frame_counter))
-            else:
-                print('FPS throttling. Skipping frame ' + str(frame_counter))
-            frame_counter=frame_counter+1
-    except KeyboardInterrupt:
-        print('\nInterrupted by user')
-    finally:
-        cap.release()
+    net = cv2.dnn.readNet(args.weights, args.config)
+
+    # Compute output layer names once
+    layer_names = net.getLayerNames()
+    output_layer_names = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
+
+    if is_stream_url(args.input):
+
+        cap = cv2.VideoCapture(args.input)
         if args.framelimit > 0:
-            writer.close()
+            writer = imageio.write_frames(args.outputfile, (int(cap.get(3)), int(cap.get(4))))
+            writer.send(None)
+        frame_counter = 0
+        try:
+            while(True):
+                if args.framelimit > 0 and frame_counter > args.framestart + args.framelimit:
+                    break
 
-else:
-    if os.path.isdir(args.input):
-        video_files = []
-        for dirpath, dirnames, filenames in os.walk(args.input):
-            for filename in [f for f in filenames if f.endswith(".mp4")]:
-                video_files.append(os.path.join(dirpath, filename))
-        for idx, video_path in enumerate(video_files):
-            base, ext = os.path.splitext(args.outputfile)
-            if len(video_files) > 1:
-                outputfile = base + '_' + str(idx) + ext
-            else:
-                outputfile = args.outputfile
-            print('Processing video ' + video_path)
-            processvideo(video_path, net, outputfile, args.framestart, args.framelimit)
+                if frame_counter % args.fpsthrottle == 0:
+                    ret, frame = cap.read()
+                    if ret and frame_counter >= args.framestart:
+                        print('Detecting objects in frame ' + str(frame_counter))
+                        frame = detect(frame, net, output_layer_names, classes, colors,
+                                       args.outputdir, args.invertcolor)
+                        if args.framelimit > 0:
+                            writer.send(frame)
+                    else:
+                        print('Skipping frame ' + str(frame_counter))
+                else:
+                    # Read and discard frame to drain the buffer
+                    cap.grab()
+                    print('FPS throttling. Skipping frame ' + str(frame_counter))
+                frame_counter = frame_counter + 1
+        except KeyboardInterrupt:
+            print('\nInterrupted by user')
+        finally:
+            cap.release()
+            if args.framelimit > 0:
+                writer.close()
+
     else:
-        processvideo(args.input, net, args.outputfile, args.framestart, args.framelimit)
+        if os.path.isdir(args.input):
+            video_files = []
+            for dirpath, dirnames, filenames in os.walk(args.input):
+                for filename in [f for f in filenames if f.endswith(".mp4")]:
+                    video_files.append(os.path.join(dirpath, filename))
+            for idx, video_path in enumerate(video_files):
+                base, ext = os.path.splitext(args.outputfile)
+                if len(video_files) > 1:
+                    outputfile = base + '_' + str(idx) + ext
+                else:
+                    outputfile = args.outputfile
+                print('Processing video ' + video_path)
+                processvideo(video_path, net, output_layer_names, classes, colors,
+                             outputfile, args.outputdir, args.invertcolor,
+                             args.framestart, args.framelimit)
+        else:
+            processvideo(args.input, net, output_layer_names, classes, colors,
+                         args.outputfile, args.outputdir, args.invertcolor,
+                         args.framestart, args.framelimit)
+
+
+if __name__ == '__main__':
+    main()
