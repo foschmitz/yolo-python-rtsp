@@ -103,8 +103,16 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# IDE
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
 output/
 output.mp4
 yolov3.weights
 yolov3-tiny.weights
+*.pt
 object-detection.jpg

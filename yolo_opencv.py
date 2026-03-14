@@ -5,140 +5,98 @@
 ############################################
 
 import os
-import os.path
+import sys
 import cv2
 import argparse
-import numpy as np
-import imageio_ffmpeg as imageio
 import datetime
+import imageio_ffmpeg as imageio
+from ultralytics import YOLO
 
-ap = argparse.ArgumentParser()
-ap.add_argument('-i', '--input', required=False,
-                help = 'path to input image', default = 'sampledata')
-ap.add_argument('-o', '--outputfile', required=False,
-                help = 'filename for output video', default='output.mp4')
-ap.add_argument('-od', '--outputdir', required=False,
-                help = 'path to output folder', default = 'output')
-ap.add_argument('-fs', '--framestart', required=False,
-                help = 'start frame', default=0)
-ap.add_argument('-fl', '--framelimit', required=False,
-                help = 'number of frames to process (0 = all)', default=0)
-ap.add_argument('-c', '--config', required=False,
-                help = 'path to yolo config file', default = 'cfg/yolov3-tiny.cfg')
-ap.add_argument('-w', '--weights', required=False,
-                help = 'path to yolo pre-trained weights', default = 'yolov3-tiny.weights')
-ap.add_argument('-cl', '--classes', required=False,
-                help = 'path to text file containing class names',  default = 'cfg/yolov3.txt')
-ap.add_argument('-ic', '--invertcolor', required=False,
-                help = 'invert RGB 2 BGR',  default = 'False')
-ap.add_argument('-fpt', '--fpsthrottle', required=False,
-                help = 'skips (int) x frames in order to catch up with the stream for slow machines 1 = no throttle',  default = 1)
-args = ap.parse_args()
 
-def str2bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+def parse_args():
+    ap = argparse.ArgumentParser(description='YOLO object detection on video files and RTSP streams')
+    ap.add_argument('-i', '--input', required=False,
+                    help='path to input video or stream URL', default='sampledata')
+    ap.add_argument('-o', '--outputfile', required=False,
+                    help='filename for output video', default='output.mp4')
+    ap.add_argument('-od', '--outputdir', required=False,
+                    help='path to output folder for cropped detections', default='output')
+    ap.add_argument('-m', '--model', required=False,
+                    help='YOLO model to use (e.g. yolo11n.pt, yolov8s.pt)', default='yolo11n.pt')
+    ap.add_argument('-fs', '--framestart', required=False,
+                    help='start frame', type=int, default=0)
+    ap.add_argument('-fl', '--framelimit', required=False,
+                    help='number of frames to process (0 = all)', type=int, default=0)
+    ap.add_argument('-conf', '--confidence', required=False,
+                    help='confidence threshold (0.0 - 1.0)', type=float, default=0.5)
+    ap.add_argument('-pad', '--padding', required=False,
+                    help='padding around crop as fraction (e.g. 0.2 = 20%%)', type=float, default=0.15)
+    ap.add_argument('-fpt', '--fpsthrottle', required=False,
+                    help='skip every N frames to keep up with stream (1 = no throttle)',
+                    type=int, default=1)
+    return ap.parse_args()
 
-def get_output_layers(net):
 
-    layer_names = net.getLayerNames()
+def save_crop(image, label, confidence, x1, y1, x2, y2, outputdir, padding):
+    """Save a padded crop of the detected object."""
+    h, w = image.shape[:2]
 
-    output_layers = [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+    # Add padding
+    box_w = x2 - x1
+    box_h = y2 - y1
+    pad_x = int(box_w * padding)
+    pad_y = int(box_h * padding)
+    x1 = max(0, x1 - pad_x)
+    y1 = max(0, y1 - pad_y)
+    x2 = min(w, x2 + pad_x)
+    y2 = min(h, y2 + pad_y)
 
-    return output_layers
+    now = datetime.datetime.now()
+    dirname = os.path.join(outputdir, label, now.strftime('%Y-%m-%d'))
+    os.makedirs(dirname, exist_ok=True)
 
-def save_bounded_image(image, class_id, confidence, x, y, x_plus_w, y_plus_h):
-    label = str(classes[class_id])
-    dirname = os.path.join(args.outputdir, label, datetime.datetime.now().strftime('%Y-%m-%d'))
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
-
-    filename = label + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S_%f') + '_conf' + "{:.2f}".format(confidence) + '.jpg'
-    print ('Saving bounding box:' + filename)
-    roi = image[y:y_plus_h, x:x_plus_w]
-    if roi.any():
-        if str2bool(args.invertcolor) == False:
-            roi = cv2.cvtColor(roi, cv2.COLOR_RGB2BGR)
+    filename = label + '_' + now.strftime('%Y-%m-%d_%H_%M_%S_%f') + '_conf' + "{:.2f}".format(confidence) + '.jpg'
+    print('Saving crop: ' + filename)
+    roi = image[y1:y2, x1:x2]
+    if roi.size > 0:
         cv2.imwrite(os.path.join(dirname, filename), roi)
 
-def draw_prediction(img, class_id, confidence, x, y, x_plus_w, y_plus_h):
-    label = str(classes[class_id])
-    color = COLORS[class_id]
 
-    cv2.rectangle(img, (x,y), (x_plus_w,y_plus_h), color, 3)
-    cv2.putText(img, label, (x-10,y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 3)
+def detect(frame, model, confidence, outputdir, padding):
+    """Run YOLO detection, save crops, draw annotations, return annotated frame."""
+    results = model(frame, conf=confidence, verbose=False)[0]
 
-def detect(image):
+    # Save crops before drawing
+    for box in results.boxes:
+        x1, y1, x2, y2 = map(int, box.xyxy[0])
+        conf = float(box.conf[0])
+        label = results.names[int(box.cls[0])]
+        save_crop(frame, label, conf, x1, y1, x2, y2, outputdir, padding)
 
-    Width = image.shape[1]
-    Height = image.shape[0]
-    scale = 0.00392
-
-    net = cv2.dnn.readNet(args.weights, args.config)
-
-    blob = cv2.dnn.blobFromImage(image, scale, (416,416), (0,0,0), True, crop=False)
-
-    net.setInput(blob)
-
-    outs = net.forward(get_output_layers(net))
-
-    class_ids = []
-    confidences = []
-    boxes = []
-    conf_threshold = 0.5
-    nms_threshold = 0.4
-
-    for out in outs:
-        for detection in out:
-            scores = detection[5:]
-            class_id = np.argmax(scores)
-            confidence = scores[class_id]
-            if confidence > 0.5:
-                center_x = int(detection[0] * Width)
-                center_y = int(detection[1] * Height)
-                w = int(detection[2] * Width)
-                h = int(detection[3] * Height)
-                x = center_x - w / 2
-                y = center_y - h / 2
-                class_ids.append(class_id)
-                confidences.append(float(confidence))
-                boxes.append([x, y, w, h])
+    # Draw annotations
+    annotated = results.plot()
+    return annotated
 
 
-    indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
-
-    orgImage = image.copy()
-    for i in indices:
-        i = i[0]
-        box = boxes[i]
-        x = box[0]
-        y = box[1]
-        w = box[2]
-        h = box[3]
-        save_bounded_image(orgImage, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
-        draw_prediction(image, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
-    if str2bool(args.invertcolor) == True:
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    return image
-
-def processvideo(file):
+def processvideo(file, model, outputfile, outputdir, confidence, padding, framestart=0, framelimit=0):
     cap = cv2.VideoCapture(file)
 
-    writer = imageio.write_frames(args.outputfile, (int(cap.get(3)), int(cap.get(4))))
+    writer = imageio.write_frames(outputfile, (int(cap.get(3)), int(cap.get(4))))
     writer.send(None)
     frame_counter = 0
-    while(cap.isOpened()):
-        frame_counter = frame_counter + 1
+    while cap.isOpened():
+        frame_counter += 1
+        if framelimit > 0 and frame_counter > framestart + framelimit:
+            break
         ret, frame = cap.read()
-        print('Detecting objects in frame ' + str(frame_counter))
-        if ret==True:
-            if not frame is None:
-                image = detect(frame)
-                writer.send(frame)
+        if ret:
+            if frame_counter < framestart:
+                print('Skipping frame ' + str(frame_counter))
+                continue
+            print('Detecting objects in frame ' + str(frame_counter))
+            if frame is not None:
+                image = detect(frame, model, confidence, outputdir, padding)
+                writer.send(image)
             else:
                 print('Frame error in frame ' + str(frame_counter))
         else:
@@ -146,43 +104,67 @@ def processvideo(file):
     cap.release()
     writer.close()
 
-# Doing some Object Detection on a video
-classes = None
 
-with open(args.classes, 'r') as f:
-    classes = [line.strip() for line in f.readlines()]
-COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
+def is_stream_url(input_path):
+    stream_prefixes = ('rtsp://', 'rtsps://', 'rtmp://', 'http://', 'https://')
+    return any(input_path.startswith(p) for p in stream_prefixes)
 
-if args.input.startswith('rtsp'):
 
-    cap = cv2.VideoCapture(args.input)
-    if int(args.framelimit) > 0:
-        writer = imageio.write_frames(args.outputfile, (int(cap.get(3)), int(cap.get(4))))
-        writer.send(None)
-    frame_counter = 0
-    while(True):
-        if int(args.framelimit) > 0 and frame_counter > int(args.framestart) + int(args.framelimit):
-            writer.close()
-            break
+def main():
+    args = parse_args()
 
-        if frame_counter % int(args.fpsthrottle) ==0:
-            ret, frame = cap.read()
-            if ret and frame_counter >= int(args.framestart):
-                print('Detecting objects in frame ' + str(frame_counter))
-                frame = detect(frame)
-                if int(args.framelimit) > 0:
-                    writer.send(frame)
-            else:
-                print('Skipping frame ' + str(frame_counter))
-        else:
-            print('FPS throttling. Skipping frame ' + str(frame_counter))
-        frame_counter=frame_counter+1
+    model = YOLO(args.model)
 
-else:
-    if os.path.isdir(args.input):
-        for dirpath, dirnames, filenames in os.walk(args.input):
-            for filename in [f for f in filenames if f.endswith(".mp4")]:
-                print('Processing video ' + os.path.join(dirpath, filename))
-                processvideo(os.path.join(dirpath, filename))
+    if is_stream_url(args.input):
+        cap = cv2.VideoCapture(args.input)
+        if args.framelimit > 0:
+            writer = imageio.write_frames(args.outputfile, (int(cap.get(3)), int(cap.get(4))))
+            writer.send(None)
+        frame_counter = 0
+        try:
+            while True:
+                if args.framelimit > 0 and frame_counter > args.framestart + args.framelimit:
+                    break
+
+                if frame_counter % args.fpsthrottle == 0:
+                    ret, frame = cap.read()
+                    if ret and frame_counter >= args.framestart:
+                        print('Detecting objects in frame ' + str(frame_counter))
+                        frame = detect(frame, model, args.confidence, args.outputdir, args.padding)
+                        if args.framelimit > 0:
+                            writer.send(frame)
+                    else:
+                        print('Skipping frame ' + str(frame_counter))
+                else:
+                    cap.grab()
+                    print('FPS throttling. Skipping frame ' + str(frame_counter))
+                frame_counter += 1
+        except KeyboardInterrupt:
+            print('\nInterrupted by user')
+        finally:
+            cap.release()
+            if args.framelimit > 0:
+                writer.close()
+
     else:
-        processvideo(os.path.join(args.input))
+        if os.path.isdir(args.input):
+            video_files = []
+            for dirpath, dirnames, filenames in os.walk(args.input):
+                for filename in [f for f in filenames if f.endswith(".mp4")]:
+                    video_files.append(os.path.join(dirpath, filename))
+            for idx, video_path in enumerate(video_files):
+                base, ext = os.path.splitext(args.outputfile)
+                if len(video_files) > 1:
+                    outputfile = base + '_' + str(idx) + ext
+                else:
+                    outputfile = args.outputfile
+                print('Processing video ' + video_path)
+                processvideo(video_path, model, outputfile, args.outputdir,
+                             args.confidence, args.padding, args.framestart, args.framelimit)
+        else:
+            processvideo(args.input, model, args.outputfile, args.outputdir,
+                         args.confidence, args.padding, args.framestart, args.framelimit)
+
+
+if __name__ == '__main__':
+    main()
