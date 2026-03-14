@@ -1,64 +1,52 @@
-# Object Detection with Yolo, OpenCV and Python via Real Time Streaming Protocol (RTSP)
+# YOLO Object Detection via RTSP / Video / Webcam
 
-Object detection using deep learning with Yolo, OpenCV and Python via Real Time Streaming Protocol (`RTSP`)
+Object detection using [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) on video files and RTSP streams.
 
-Recognized objects are stored in date seperated in folders per class for further training or face recognition.
+Detected objects are cropped and saved in date-separated folders per class — useful for further training or recognition tasks.
 
-OpenCV `dnn` module supports running inference on pre-trained deep learning models from popular frameworks like Caffe, Torch and TensorFlow.
+## Setup
 
-When it comes to object detection, popular detection frameworks are
- * YOLO
- * SSD
- * Faster R-CNN
+```bash
+pip install -r requirements.txt
+```
 
- Support for running YOLO/DarkNet has been added to OpenCV dnn module recently.
+The YOLO model weights (e.g. `yolo11n.pt`) are downloaded automatically on first run.
 
- ## Dependencies
-  * opencv
-  * numpy
-  * imageio-ffmpeg
+## Usage
 
-`pip install numpy opencv-python imageio-ffmpeg`
+**Local video:**
+```bash
+python yolo_opencv.py --input sampledata/commuters.mp4
+```
 
-**Note: Python 2.x is not supported**
+**RTSP stream:**
+```bash
+python yolo_opencv.py --input rtsp://user:pass@ip:port/stream --framelimit 100
+```
 
- ## YOLO (You Only Look Once)
+**Directory of videos:**
+```bash
+python yolo_opencv.py --input /path/to/videos/
+```
 
- Download the pre-trained YOLO v3 weights file from this [link](https://pjreddie.com/media/files/yolov3.weights) or for tiny weights for slower machines [link](https://pjreddie.com/media/files/yolov3-tiny.weights) and place it in the current directory or you can directly download to the current directory in terminal using
+## Arguments
 
- `$ wget https://pjreddie.com/media/files/yolov3.weights`
+| parameter | type | default | description |
+|-----------|------|---------|-------------|
+| `--input` | String | `sampledata` | path to video file, directory, or stream URL |
+| `--outputfile` | String | `output.mp4` | output video filename |
+| `--outputdir` | String | `output` | folder for cropped detections |
+| `--model` | String | `yolo11n.pt` | YOLO model (`yolo11n.pt`, `yolo11s.pt`, `yolov8n.pt`, etc.) |
+| `--framestart` | Int | `0` | start detecting at frame N |
+| `--framelimit` | Int | `0` | stop after N frames (0 = all) |
+| `--confidence` | Float | `0.5` | detection confidence threshold |
+| `--padding` | Float | `0.15` | padding around crops (0.15 = 15%) |
+| `--fpsthrottle` | Int | `1` | process every Nth frame (for slow machines) |
 
- `$ wget https://pjreddie.com/media/files/yolov3-tiny.weights`
+### Sample output:
+![](object-detection.png)
 
- Provided all the files are in the current directory, below command will apply object detection on the input video `commuters.mp4`.
+## Credits
+Based on [Arun Ponnusamy's Object Detection OpenCV](https://github.com/arunponnusamy/object-detection-opencv).
 
- `$ python yolo_opencv.py --input sampledata/commuters.mp4 --config cfg/yolov3-tiny.cfg --weights yolov3-tiny.weights --classes cfg/yolov3.txt`
-
- For RTSP simply put the RTSP URL as --input
-
-  `$ python yolo_opencv.py --input rtsp://xxxxx:1935/live/sys.stream --framestart 100 --framelimit 100 --config cfg/yolov3-tiny.cfg --weights yolov3-tiny.weights --classes cfg/yolov3.txt`
-
- **Arguments**
-
- | parameter | type    | description                                      |
- | --------- | ------- | ------------------------------------------------ |
- | `input`     | String  | /path/to/input/stream |
- | `outputfile`  | String | /path/to/outputfile |
- | `outputdir` | String  | /path/to/outputdir  |
- | `framestart` | Int  | start detecting at frame x (int) |
- | `framelimit` | Int  | stop after x (int) frames and save the video in case of streams. 0 no limit |
- | `config` | String  | /path/to/config/file  |
- | `weights` | String  | /path/to/weights/file  |
- | `classes`  | String | /path/to/classes/file |
- | `invertcolor` | Boolean  | in case of BGR streams |
- | `fpsthrottle` | Int  | in case of slower machines to keep up with a stream  |
-
- ### sample output :
- ![](object-detection.png)
-
-Checkout the object detection implementation available in [cvlib](http:cvlib.net) which enables detecting common objects in the context through a single function call `detect_common_objects()`.
-
- ## Credits
- This project is based on [Arun Ponnusamy's Object Detection OpenCV](https://github.com/arunponnusamy/object-detection-opencv)
-
- Sample video footage from [Videvo - Free Stock Video Footage](https://www.videvo.net/video/people-crossing-road-in-hong-kong-cbd/8162/)
+Sample video from [Videvo](https://www.videvo.net/video/people-crossing-road-in-hong-kong-cbd/8162/).
